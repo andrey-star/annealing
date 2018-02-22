@@ -1,18 +1,40 @@
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Random;
 import java.util.Scanner;
+
+import javax.swing.JApplet;
+
 import static java.lang.Math.*;
 
-public class GraphAnnealing {
+import java.awt.Color;
+import java.awt.Graphics;
 
+@SuppressWarnings("serial")
+public class GraphAnnealing extends JApplet {
+
+	
 	public static ArrayList<Point> swap(ArrayList<Point> a, int i, int j) {
 		Point first = a.get(i);
 		Point second = a.get(j);
 		a.set(i, second);
 		a.set(j, first);
+		return a;
+	}
+
+	public static ArrayList<Point> flip(ArrayList<Point> a, int i, int j) {
+
+		int to = max(i, j);
+		int from = min(i, j);
+
+		for (int b = from; b < (to + from + 1) / 2; b++) {
+			Point d = a.get(b);
+			a.set(b, a.get(to + from - b));
+			a.set(to + from - b, d);
+		}
+
 		return a;
 	}
 
@@ -23,9 +45,9 @@ public class GraphAnnealing {
 		}
 		return energy;
 	}
-	
+
 	public static double localEnergyChange(ArrayList<Point> a, int i, int j) {
-		
+
 		if (i > 0 && j > 0 && i < a.size() - 1 && j < a.size() - 1) {
 			double ai = hypot(a.get(i).x - a.get(i - 1).x, a.get(i).y - a.get(i - 1).y);
 			double jd = hypot(a.get(j).x - a.get(j + 1).x, a.get(j).y - a.get(j + 1).y);
@@ -33,14 +55,14 @@ public class GraphAnnealing {
 			double id = hypot(a.get(i).x - a.get(j + 1).x, a.get(i).y - a.get(j + 1).y);
 			return id + aj - ai - jd;
 		}
-		
+
 		return 0;
 	}
 
 	public static double newTemp(double temperature) {
 		return temperature * 0.95;
 	}
-	
+
 	static class Point {
 		int x;
 		int y;
@@ -49,32 +71,70 @@ public class GraphAnnealing {
 			this.x = x;
 			this.y = y;
 		}
-		
+
 		public String toString() {
 			return this.x + " " + this.y;
 		}
 	}
-
-	public static void main(String[] args) throws FileNotFoundException {
-		ArrayList<Point> points = new ArrayList<>();
-		Scanner in = new Scanner(new File("image.txt"));
-		Random random = new Random();
-		int n = in.nextInt();
-
-		for (int i = 0; i < n; i++) {
-			String line = in.next();
-			for (int j = 0; j < n; j++) {
-				char c = line.charAt(j);
-				if (c == '#') {
-					Point point = new Point(i, j);
-					points.add(point);
-				}
-			}
+	
+	@Override
+	public void init() {
+		this.setLayout(null);
+		this.setSize(2*margin + 52*K, 2*margin + 52*K);
+		try {
+			main(null);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
 		}
+		repaint();
+	}
+	
+	static int margin = 10;
+	
+	@Override
+	public void paint(Graphics g) {
+		try {
+			PrintWriter out = new PrintWriter(new File("output.txt"));
+			for (Point point : points) {
+				out.println(point.x + " " + point.y);
+			}
+			out.close();
+			
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		for (int i = 0; i < points.size() - 1; i++) {
+			g.drawLine(margin + K*points.get(i).x, margin + K*points.get(i).y, margin + K*points.get(i + 1).x, margin + K*points.get(i + 1).y);
+			
+		}
+		for (int i = 0; i < points.size(); i++) {
+			g.setColor(Color.MAGENTA);
+			
+			if (i == 0 || i == points.size() - 1) {
+				g.setColor(Color.GREEN);
+			}
+			
+			g.fillOval(margin + K*points.get(i).x - 5, margin + K*points.get(i).y - 5, 10, 10);
+			g.setColor(Color.BLACK);
+		}
+	}
 
+	static int K = 17;
+	
+	static ArrayList<Point> points = new ArrayList<>();
+	
+	public static void main(String[] args) throws FileNotFoundException {
+		Random random = new Random();
+
+		Scanner in = new Scanner(new File("output.txt"));
+		int n = 52;
+		
+		for (int i = 0; i < 526; i++) {
+			Point point = new Point(in.nextInt(), in.nextInt());
+			points.add(point);
+		}
 		in.close();
-		Collections.shuffle(points);
-
+		
 		double energy = fullGraphEnergy(points);
 		double temperature = 30;
 		long startTime = System.currentTimeMillis();
@@ -89,21 +149,17 @@ public class GraphAnnealing {
 				j = random.nextInt(points.size());
 			}
 
-			tryChange = swap(tryChange, i, j);
-			
+			tryChange = flip(tryChange, i, j);
+
 			double newEnergy = fullGraphEnergy(tryChange);
-//			if (i < j) {
-//				newEnergy = energy + localEnergyChange(points, i, j);
-//			} else {
-//				newEnergy = energy + localEnergyChange(points, j, i);
-//			}
+
 			if (newEnergy <= energy) {
-				points = swap(points, i, j);
+				points = flip(points, i, j);
 				energy = newEnergy;
 			} else {
 				double p = exp(-(newEnergy - energy) / temperature);
 				if (p > random()) {
-					points = swap(points, i, j);
+					points = flip(points, i, j);
 					energy = newEnergy;
 				}
 			}
@@ -111,7 +167,7 @@ public class GraphAnnealing {
 			temperature = newTemp(temperature);
 
 			System.out.println("Generation: " + gen + " Energy " + energy);
-			if (gen >= 1e7) {
+			if (gen >= 1e6) {
 				for (Point point : points) {
 					String toChess = "";
 					if (point.y < 26) {
@@ -126,8 +182,8 @@ public class GraphAnnealing {
 			}
 
 		}
-
 		long endTime = System.currentTimeMillis();
 		System.out.println("\nTime passed: " + (endTime - startTime) * 1.0 / 1000 + "s");
+		System.out.println(points.toString());
 	}
 }
